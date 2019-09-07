@@ -11,3 +11,105 @@ Encoding: UTF-8
 
 RnwWeave: Sweave
 LaTeX: pdfLaTeX
+
+library(tidyLPA)
+library(tidyverse)
+library(googlesheets)
+library(ggplot2)
+
+
+#data preparation 
+
+data <-
+  gs_title("exam_survey_data") %>% 
+  gs_read(1)
+
+
+data <- data %>%
+  distinct(id, .keep_all = TRUE)
+
+
+data[ , 7:51][is.na(data[ , 7:51] ) ] = 0 
+
+
+View(data)
+
+
+#latent class analysis
+
+
+profiles <-  
+  data %>% 
+  select(after_anger:after_interest) %>% 
+  estimate_profiles(., n_profiles = 1:10, model = c(1, 3), variances = c("equal", "varying"),
+                    covariances = c("zero", "varying"), package = "mclust")
+
+
+profiles %>% 
+  compare_solutions(statistics = c('BIC', 'AIC', 'KIC', 'CAIC')) %>% 
+  plot()
+
+plot(profiles)
+
+View(profiles2)
+
+
+profiles %>% 
+  plot() +
+  labs( x = "BIC", y = "Classes", title = "Classes fit model 1") +
+  theme_light() +
+  theme(plot.title=element_text(hjust=0.5)) +
+  theme(text=element_text(size=10, family="Times New Roman", color = "black")) 
+
+library(stargazer) 
+
+stargazer(profiles, type = "html")
+
+prof8 <- profiles$model_1_class_8
+
+prof4 <- profiles$model_1_class_4
+
+
+prof8 %>% 
+  select(after_anger:after_interest) %>% 
+  estimate_profiles(., n_profiles = 8, models = 1, variances = c("equal", "varying")
+                    covariances = c("varying", "varying"), package = "mclust") %>% 
+  plot_profiles(to_center = TRUE) +
+  coord_flip()
+
+
+profiles %>%
+  tidyLPA::get_data() %>%
+  filter(classes_number == 8) %>%
+  gather(emotion, intensity, after_anger:after_interest) %>% 
+  mutate(emotion = str_remove(emotion, "after_") %>% fct_inorder()) %>% 
+  group_by(emotion, Class) %>% 
+  summarise(intensity_mean = mean(intensity),
+            intensity_se = sd(intensity)/sqrt(n())) %>% 
+  ggplot() +
+  aes(x = emotion, y = intensity_mean, ymin = intensity_mean - intensity_se, ymax = intensity_mean + intensity_se, group = Class) +
+  geom_line() +
+  facet_wrap(~Class, labeller = labeller( Class = names)) +
+  geom_pointrange() +
+  coord_flip()+
+  labs( x = "Emotion", y = "Intensity", title = "Emotion profiles") +
+  theme_light() +
+  theme(plot.title=element_text(hjust=0.5)) +
+  theme(text=element_text(size=10, family="Times New Roman", color = "black")) 
+
+names <- c(
+  '1'= "a",
+  '2'= "b",
+  '3'= "c",
+  '4'= "d",
+  '5'= "e",
+  '6'= "f",
+  '7'= "g",
+  '8'= "h")
+
+
+save(profiles, file ="profiles.RData")
+
+get_data(profiles[[8]]) %>% 
+  count(Class)
+
